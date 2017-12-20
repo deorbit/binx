@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/mattn/go-runewidth"
@@ -35,13 +36,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	f, err := os.Open(*filename)
-	if err != nil {
-		panic(err)
-	}
+	dat, err := ioutil.ReadFile(*filename)
 
-	// TODO: Calculate how many bytes we really ought to buffer.
-	b1 := make([]byte, 100000)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
 
 	tcell.SetEncodingFallback(tcell.EncodingFallbackASCII)
 	s, err := tcell.NewScreen()
@@ -57,25 +57,21 @@ func main() {
 		Background(tcell.ColorBlack)
 	s.SetStyle(style)
 
-	numBytesRead, err := f.Read(b1)
-	fmt.Printf("%d bytes: %v\n", numBytesRead, b1)
-
-	numBytesRead, err = f.Read(b1)
+	w, h := s.Size()
+	numChars := w * h
 
 	for {
 		s.Show()
 		ev := s.PollEvent()
-		w, h := s.Size()
+		for i, b := range dat[0:numChars] {
+			style = style.Foreground(tcell.Color(b))
 
+			s.SetContent(i%w, i/w, tcell.RuneBoard, nil, style)
+			// emitStr(s, 0, 0, style, fmt.Sprintf("--%d--%d--%d chars--", w, h, w*h))
+		}
 		switch ev := ev.(type) {
 		case *tcell.EventResize:
 			s.Sync()
-			for i, b := range b1 {
-				style = style.Foreground(tcell.Color(b))
-
-				s.SetContent(i%w, i/w, tcell.RuneBoard, nil, style)
-				emitStr(s, 0, 0, style, fmt.Sprintf("--%d--%d--%d chars--", w, h, w*h))
-			}
 		case *tcell.EventKey:
 			if ev.Key() == tcell.KeyEscape {
 				s.Fini()
