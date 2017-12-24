@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +18,7 @@ import (
 const (
 	NormalMode = iota
 	SeekInputMode
+	PatternInputMode
 )
 
 // emitStr prepares a string for render. Will appear after Screen.Show()
@@ -35,16 +38,18 @@ func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) {
 
 // binxConfig holds binx configuration data
 type binxConfig struct {
-	filename      string
-	screen        tcell.Screen
-	byteVisWidth  int
-	byteVisHeight int
-	statStyle     tcell.Style
-	byteStyle     tcell.Style
-	alertStyle    tcell.Style
-	startByte     int64
-	mode          int
-	userInput     string
+	filename        string
+	screen          tcell.Screen
+	byteVisWidth    int
+	byteVisHeight   int
+	statStyle       tcell.Style
+	byteStyle       tcell.Style
+	alertStyle      tcell.Style
+	startByte       int64
+	mode            int
+	userInput       string
+	highlightPos    int64
+	highlightLength int64
 }
 
 // emitStatBar renders the status bar
@@ -54,6 +59,19 @@ func emitStatBar(conf binxConfig) {
 	emitStr(conf.screen,
 		0, h-1, conf.statStyle,
 		fmt.Sprintf("--%d--%d--%d chars--", conf.startByte, conf.startByte+int64(numVisibleBytes), numVisibleBytes))
+}
+
+// findPattern searches buf for a byte pattern specified by the hex
+// string p.
+func findBytePattern(p string, buf []byte) (int64, error) {
+	decodedPattern, err := hex.DecodeString(p)
+	if err != nil {
+		return 0, err
+	}
+
+	loc := bytes.Index(buf, decodedPattern)
+
+	return int64(loc), nil
 }
 
 func main() {
@@ -130,6 +148,17 @@ func main() {
 			numVisibleBytes = conf.byteVisHeight * conf.byteVisWidth
 			s.Sync()
 		case *tcell.EventKey:
+			if conf.mode == PatternInputMode {
+				if ev.Key() == tcell.KeyEscape {
+					conf.mode = NormalMode
+				} else if ev.Key() == tcell.KeyEnter {
+					conf.highlightPos, err = findBytePattern(conf.userInput, dat)
+					emitStr(conf.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("%d", conf.highlightPos))
+					conf.userInput = ""
+				} else {
+					conf.userInput = string(ev.Rune())
+				}
+			}
 			if conf.mode == SeekInputMode { // Text input mode
 				if ev.Key() == tcell.KeyEscape {
 					conf.mode = NormalMode
@@ -159,6 +188,8 @@ func main() {
 					s.Sync()
 				} else if ev.Rune() == 's' {
 					conf.mode = SeekInputMode
+				} else if ev.Rune() == 'f' {
+					conf.mode = PatternInputMode
 				}
 			}
 		}
