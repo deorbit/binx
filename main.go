@@ -143,7 +143,7 @@ func emitStatBar(state *AppState) {
 	numVisibleBytes := w * h
 	emitStr(state.screen,
 		0, h-1, state.statStyle,
-		fmt.Sprintf("--%d--%d--%d--Last Action: %s--Status: %s\t%s", state.startByte, state.startByte+int64(numVisibleBytes), state.mode, state.lastAction, state.status, state.userInput))
+		fmt.Sprintf("--%d--%d--%d--Last Action: %s--Status: %s...\t%s", state.startByte, state.startByte+int64(numVisibleBytes), state.mode, state.lastAction, state.status, state.userInput))
 }
 
 // findPattern searches buf for a byte pattern specified by the hex
@@ -210,10 +210,12 @@ func rootReducer(state *AppState) func(Action) *AppState {
 				highlightPos, err := findBytePattern(state.userInput, state.dat)
 				if err != nil {
 					state.status = err.Error()
+					break
 				}
 				state.highlightPos = highlightPos
-				emitStr(state.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("%d", state.highlightPos))
+				state.status = fmt.Sprintf("%d", highlightPos)
 				state.userInput = ""
+				state.mode = NormalMode
 			}
 		case BinxSetScreenStyle:
 			state.screen.SetStyle(action.value.(tcell.Style))
