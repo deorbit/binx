@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/mattn/go-runewidth"
@@ -25,26 +26,15 @@ const (
 const (
 	BinxResize         = "BINX_RESIZE"
 	BinxEscape         = "BINX_ESCAPE"
+	BinxKeyEnter       = "BINX_KEYENTER"
 	BinxKeyUp          = "BINX_KEYUP"
 	BinxKeyDown        = "BINX_KEYDOWN"
 	BinxSetScreenStyle = "BINX_SETSTYLE"
 	BinxToggleSeekMode = "BINX_TOGGLE_SEEKMODE"
+	BinxKeyS           = "BINX_KEY_S"
+	BinxKeyF           = "BINX_KEY_F"
+	BinxKeyOther       = "BINX_KEY_OTHER"
 )
-
-// emitStr prepares a string for render. Will appear after Screen.Show()
-func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) {
-	for _, c := range str {
-		var combiningChars []rune
-		width := runewidth.RuneWidth(c)
-		if width == 0 {
-			combiningChars = []rune{c}
-			c = ' '
-			width = 1
-		}
-		s.SetContent(x, y, c, combiningChars, style)
-		x += width
-	}
-}
 
 // binxConfig holds binx configuration data
 type binxConfig struct {
@@ -120,7 +110,30 @@ func HandleTcellEvent(store Store, ev tcell.Event) {
 			store.Dispatcher <- Action{name: BinxKeyDown, value: ev}
 		} else if ev.Key() == tcell.KeyUp {
 			store.Dispatcher <- Action{name: BinxKeyUp, value: ev}
+		} else if ev.Key() == tcell.KeyEnter {
+			store.Dispatcher <- Action{name: BinxKeyEnter, value: ev}
+		} else if ev.Rune() == 's' {
+			store.Dispatcher <- Action{name: BinxKeyS, value: ev.Rune()}
+		} else if ev.Rune() == 'f' {
+			store.Dispatcher <- Action{name: BinxKeyF, value: ev.Rune()}
+		} else {
+			store.Dispatcher <- Action{name: BinxKeyOther, value: ev.Rune()}
 		}
+	}
+}
+
+// emitStr prepares a string for render. Will appear after Screen.Show()
+func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) {
+	for _, c := range str {
+		var combiningChars []rune
+		width := runewidth.RuneWidth(c)
+		if width == 0 {
+			combiningChars = []rune{c}
+			c = ' '
+			width = 1
+		}
+		s.SetContent(x, y, c, combiningChars, style)
+		x += width
 	}
 }
 
@@ -130,7 +143,7 @@ func emitStatBar(state *AppState) {
 	numVisibleBytes := w * h
 	emitStr(state.screen,
 		0, h-1, state.statStyle,
-		fmt.Sprintf("--%d--%d--%d chars--Last Action: %s--Status: %s", state.startByte, state.startByte+int64(numVisibleBytes), numVisibleBytes, state.lastAction, state.status))
+		fmt.Sprintf("--%d--%d--%d--Last Action: %s--Status: %s\t%s", state.startByte, state.startByte+int64(numVisibleBytes), state.mode, state.lastAction, state.status, state.userInput))
 }
 
 // findPattern searches buf for a byte pattern specified by the hex
@@ -172,10 +185,56 @@ func rootReducer(state *AppState) func(Action) *AppState {
 			state.byteVisHeight = h - 1
 		// 	state.screen.Sync()
 		case BinxEscape:
-			state.screen.Fini()
-			os.Exit(0)
+			if state.mode == NormalMode {
+				state.screen.Fini()
+				os.Exit(0)
+			}
+			if state.mode == SeekInputMode {
+				state.mode = NormalMode
+				state.userInput = ""
+			}
+			if state.mode == PatternInputMode {
+				state.mode = NormalMode
+				state.userInput = ""
+			}
+		case BinxKeyEnter:
+			if state.mode == SeekInputMode {
+				startByte, err := strconv.ParseInt(state.userInput, 0, 64) // hex, dec, or octal
+				state.startByte = startByte
+				state.userInput = ""
+				state.mode = NormalMode
+				if err != nil {
+					break
+				}
+			} else if state.mode == PatternInputMode {
+				highlightPos, err := findBytePattern(state.userInput, state.dat)
+				if err != nil {
+					state.status = err.Error()
+				}
+				state.highlightPos = highlightPos
+				emitStr(state.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("%d", state.highlightPos))
+				state.userInput = ""
+			}
 		case BinxSetScreenStyle:
 			state.screen.SetStyle(action.value.(tcell.Style))
+		case BinxKeyS:
+			if state.mode == NormalMode {
+				state.mode = SeekInputMode
+				state.userInput = ""
+			} else if state.mode == SeekInputMode {
+				state.userInput += string(action.value.(rune))
+			}
+		case BinxKeyF:
+			if state.mode == NormalMode {
+				state.mode = PatternInputMode
+				state.userInput = ""
+			} else {
+				state.userInput += string(action.value.(rune))
+			}
+		case BinxKeyOther:
+			if state.mode == SeekInputMode {
+				state.userInput += string(action.value.(rune))
+			}
 		default:
 			break
 		}
@@ -238,6 +297,7 @@ func main() {
 		statStyle:  tcell.StyleDefault,
 		alertStyle: tcell.StyleDefault,
 		startByte:  0,
+		mode:       NormalMode,
 	}
 
 	store := CreateStore(rootReducer(&state))
@@ -245,12 +305,11 @@ func main() {
 	// Start the goroutine to receive actions.
 	go store.Reduce()
 
-	// store.Dispatcher <- Action{name: BinxSetScreenStyle, value: state.byteStyle}
+	store.Dispatcher <- Action{name: BinxSetScreenStyle, value: state.byteStyle}
 
 	for {
 		ev := s.PollEvent()
 		HandleTcellEvent(store, ev)
-		// s.Show()
 		render(&state)
 
 		// // Do we have the byte seeker text input open?
@@ -278,9 +337,9 @@ func main() {
 		// 		if ev.Key() == tcell.KeyEscape {
 		// 			state.mode = NormalMode
 		// 		} else if ev.Key() == tcell.KeyEnter {
-		// 			state.highlightPos, err = findBytePattern(state.userInput, dat)
-		// 			emitStr(state.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("%d", state.highlightPos))
-		// 			state.userInput = ""
+		// state.highlightPos, err = findBytePattern(state.userInput, dat)
+		// emitStr(state.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("%d", state.highlightPos))
+		// state.userInput = ""
 		// 		} else {
 		// 			state.userInput = string(ev.Rune())
 		// 		}
