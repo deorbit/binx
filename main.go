@@ -175,15 +175,11 @@ func rootReducer(state *AppState) func(Action) *AppState {
 			if state.startByte < 0 {
 				state.startByte = 0
 			}
-			// state.screen.Sync()
 		case BinxKeyDown:
 			state.startByte += int64(state.byteVisWidth)
-			// state.screen.Sync()
-			// state.screen.Show()
 		case BinxResize:
 			_, h := state.screen.Size()
 			state.byteVisHeight = h - 1
-		// 	state.screen.Sync()
 		case BinxEscape:
 			if state.mode == NormalMode {
 				state.screen.Fini()
@@ -313,72 +309,5 @@ func main() {
 		ev := s.PollEvent()
 		HandleTcellEvent(store, ev)
 		render(&state)
-
-		// // Do we have the byte seeker text input open?
-		// if conf.mode == SeekInputMode {
-		// 	emitStr(conf.screen, 0, 0, conf.alertStyle, "SEEK INPUT MODE")
-		// 	emitStr(conf.screen,
-		// 		conf.byteVisWidth-10,
-		// 		conf.byteVisHeight-1,
-		// 		tcell.StyleDefault,
-		// 		fmt.Sprintf("Jump to: %s", conf.userInput),
-		// 	)
-		// }
-		// Input handling.
-		// w, h := s.Size()
-
-		// switch ev := ev.(type) {
-		// case *tcell.EventResize:
-		// 	w, h = s.Size()
-		// 	state.byteVisHeight = h - 1
-		// 	emitStr(state.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("RESIGHS"))
-		// 	// numVisibleBytes := state.byteVisHeight * state.byteVisWidth
-		// 	s.Sync()
-		// case *tcell.EventKey:
-		// 	if state.mode == PatternInputMode {
-		// 		if ev.Key() == tcell.KeyEscape {
-		// 			state.mode = NormalMode
-		// 		} else if ev.Key() == tcell.KeyEnter {
-		// state.highlightPos, err = findBytePattern(state.userInput, dat)
-		// emitStr(state.screen, 0, 10, tcell.StyleDefault, fmt.Sprintf("%d", state.highlightPos))
-		// state.userInput = ""
-		// 		} else {
-		// 			state.userInput = string(ev.Rune())
-		// 		}
-		// 	}
-		// 	if state.mode == SeekInputMode { // Text input mode
-		// 		if ev.Key() == tcell.KeyEscape {
-		// 			state.mode = NormalMode
-		// 		} else if ev.Key() == tcell.KeyEnter {
-		// 			state.startByte, err = strconv.ParseInt(state.userInput, 0, 64) // hex, dec, or octal
-		// 			state.userInput = ""
-		// 			state.mode = NormalMode
-		// 			if err != nil {
-		// 				break
-		// 			}
-		// 		} else {
-		// 			state.userInput += string(ev.Rune())
-		// 		}
-		// 	} else {
-		// 		// Mouse and arrow key browse mode, aka normal mode.
-		// 		if ev.Key() == tcell.KeyEscape {
-		// 			s.Fini()
-		// 			os.Exit(0)
-		// 		} else if ev.Key() == tcell.KeyDown {
-		// 			state.startByte += int64(w)
-		// 			s.Sync()
-		// 		} else if ev.Key() == tcell.KeyUp {
-		// 			state.startByte -= int64(w)
-		// 			if state.startByte < 0 {
-		// 				state.startByte = 0
-		// 			}
-		// 			s.Sync()
-		// 		} else if ev.Rune() == 's' {
-		// 			state.mode = SeekInputMode
-		// 		} else if ev.Rune() == 'f' {
-		// 			state.mode = PatternInputMode
-		// 		}
-		// 	}
-		// }
 	}
 }
