@@ -1,6 +1,6 @@
 # binx 
 
-A terminal-based binary viewer.
+A terminal-based binary viewer/explorer.
 
 ## Why?
 
