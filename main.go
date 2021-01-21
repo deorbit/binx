@@ -247,6 +247,9 @@ func render(state *AppState) {
 	w := state.byteVisWidth
 	h := state.byteVisHeight
 	numVisibleBytes := w * h
+	if numVisibleBytes >= len(state.dat) {
+		numVisibleBytes = len(state.dat)
+	}
 	if numVisibleBytes < 0 {
 		numVisibleBytes = 0
 	}
