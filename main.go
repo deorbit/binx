@@ -264,7 +264,7 @@ func main() {
 	flag.Parse()
 
 	if *filename == "" {
-		fmt.Printf("Filename is required. Use the -f flag.")
+		fmt.Printf("Filename is required. Use the -f flag.\n")
 		os.Exit(1)
 	}
 
